@@ -1,7 +1,7 @@
 import logging
 import sys
 from config import TG_BOT_API_KEY
-from telegram import Update
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes, MessageHandler, filters
 from utils import load_messages_for_bot
 from openapi_client import OpenAIClient
@@ -13,6 +13,16 @@ logger = logging.getLogger(__name__)
 openai_client = OpenAIClient()
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    keyboard = [
+        [InlineKeyboardButton("Запитати GPT", callback_data="ask_gpt")],
+        [InlineKeyboardButton("Випадковий факт", callback_data="random_fact")],
+        [InlineKeyboardButton("Поговорити з особистістю", callback_data="talk_person")],
+        [InlineKeyboardButton("Вікторина", callback_data="start_quiz")],
+        [InlineKeyboardButton("Перекладач", callback_data="start_translate")],
+        [InlineKeyboardButton("Створити резюме", callback_data="create_resume")],
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
     text = load_messages_for_bot("main")
     await update.message.reply_text(text, parse_mode=ParseMode.MARKDOWN)
 
@@ -39,7 +49,7 @@ async def gpt_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     await update.message.reply_text("Думаю над відповіддю ... 🤔")
 
     try:
-        response_text = await openai_client.ask(user_question, system_prompt='You are a helpful assistant.')
+        response_text = await openai_client.ask(user_question, system_prompt='Ти - експерт з надання коротких та точних відповідей. Дай лаконічну, але інформативну відповідь на запитання.')
         await update.message.reply_text(response_text)
     except Exception as e:
         logger.error(f"Помилка під час запиту до OpenAI: {e}")
@@ -66,8 +76,7 @@ async def talk_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
     await update.message.reply_text(f"Починаю розмову з {person}... 👤")
     try:
-        response_text = await openai_client.ask(f"Привіт {person}! Розкажи мені щось цікаве про себе чи своє життя",
-                                                system_prompt=f"Ти - {person}, відомий вчений/історична особистість/артист. Відповідай як {person}, підтримуючи його/її стиль мови та знання. Будь коротким.")
+        response_text = await openai_client.ask(f"Привіт {person}! Розкажи мені щось цікаве про себе чи своє життя",system_prompt=f"Ти - {person}, відомий вчений/історична особистість/артист. Відповідай як {person}, підтримуючи його/її стиль мови та знання. Будь коротким.")
         await update.message.reply_text(response_text)
     except Exception as e:
         logger.error(f"Помилка при запиті до OpenAI при запиті: {e}")
