@@ -59,8 +59,7 @@ async def gpt_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
 async def random_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text("Шукаю цікавий випадковий факт... 🧠")
     try:
-        response_text = await openai_client.ask("Розкажи мені один цікавий факт",
-                                                system_prompt='Ти експерт по цікавим фактам')
+        response_text = await openai_client.ask("Розкажи мені один цікавий факт", system_prompt='Ти експерт по цікавим фактам')
         await update.message.reply_text(response_text)
     except Exception as e:
         logger.error(f"Помилка при запиті випадкового факту до OpenAI: {e}")
