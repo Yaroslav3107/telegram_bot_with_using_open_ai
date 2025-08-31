@@ -22,7 +22,7 @@ class OpenAIClient:
 
             logger.info(f"Відправлення запиту в OpenAI (текст). Повідомлення: '{user_message[:50]}...'")
             response = await self.client.chat.completions.create(
-                model="gpt-3.5-turbo",
+                model="gpt-4",
                 messages =[
                     {"role": "system", "content": final_system_prompt},
                     {"role": "user", "content": user_message}

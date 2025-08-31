@@ -1,9 +1,10 @@
 import logging
 import sys
+import os
 from config import TG_BOT_API_KEY
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes, MessageHandler, filters
-from utils import load_messages_for_bot
+from utils import load_messages_for_bot, get_image_url
 from openapi_client import OpenAIClient
 from telegram.constants import ParseMode
 
@@ -13,21 +14,16 @@ logger = logging.getLogger(__name__)
 openai_client = OpenAIClient()
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    keyboard = [
-        [InlineKeyboardButton("Запитати GPT", callback_data="ask_gpt")],
-        [InlineKeyboardButton("Випадковий факт", callback_data="random_fact")],
-        [InlineKeyboardButton("Поговорити з особистістю", callback_data="talk_person")],
-        [InlineKeyboardButton("Вікторина", callback_data="start_quiz")],
-        [InlineKeyboardButton("Перекладач", callback_data="start_translate")],
-        [InlineKeyboardButton("Створити резюме", callback_data="create_resume")],
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-
     text = load_messages_for_bot("main")
     await update.message.reply_text(text, parse_mode=ParseMode.MARKDOWN)
 
 async def gpt_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user_question = ""
+    image_url = get_image_url("chat_gpt")
+
+    if not os.path.exists(image_url):
+        logger.error(f"Файл изображения не найден: {image_url}")
+        image_url = get_image_url("placeholder") # Использование изображения-заглушки
 
     if update.message.text.startswith("/gpt") and context.args:
         user_question = " ".join(context.args)
@@ -46,10 +42,14 @@ async def gpt_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         await update.message.reply_text("Будь ласка, поставте запитання.", parse_mode=ParseMode.MARKDOWN)
         return
 
-    await update.message.reply_text("Думаю над відповіддю ... 🤔")
+    try:
+        with open(image_url, 'rb') as image_file:
+            await update.message.reply_photo(image_file, caption="Думаю над відповіддю ... 🤔")
+    except Exception as e:
+        logger.error(f"Не удалось отправить фото: {e}")
 
     try:
-        response_text = await openai_client.ask(user_question, system_prompt='Ти - експерт з надання коротких та точних відповідей. Дай лаконічну, але інформативну відповідь на запитання.')
+        response_text = await openai_client.ask(user_question, system_prompt='You are a helpful assistant.')
         await update.message.reply_text(response_text)
     except Exception as e:
         logger.error(f"Помилка під час запиту до OpenAI: {e}")
@@ -57,9 +57,21 @@ async def gpt_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
             "Вибачте, виникла помилка при отриманні відповіді від ChatGPT. Будь ла ласка, спробуйте ще раз пізніше.")
 
 async def random_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    await update.message.reply_text("Шукаю цікавий випадковий факт... 🧠")
+    image_url = get_image_url("brain")
+
+    if not os.path.exists(image_url):
+        logger.error(f"Файл изображения не найден: {image_url}")
+        image_url = get_image_url("placeholder")
+
     try:
-        response_text = await openai_client.ask("Розкажи мені один цікавий факт", system_prompt='Ти експерт по цікавим фактам')
+        with open(image_url, 'rb') as image_file:
+            await update.message.reply_photo(image_file, caption="Шукаю цікавий випадковий факт... 🧠")
+    except Exception as e:
+        logger.error(f"Не удалось отправить фото: {e}")
+
+    try:
+        response_text = await openai_client.ask("Розкажи мені один цікавий факт",
+                                                system_prompt='Ти експерт по цікавим фактам')
         await update.message.reply_text(response_text)
     except Exception as e:
         logger.error(f"Помилка при запиті випадкового факту до OpenAI: {e}")
@@ -73,9 +85,21 @@ async def talk_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
             parse_mode=ParseMode.MARKDOWN)
         return
 
-    await update.message.reply_text(f"Починаю розмову з {person}... 👤")
+    image_url = get_image_url("talk")
+
+    if not os.path.exists(image_url):
+        logger.error(f"Файл изображения не найден: {image_url}")
+        image_url = get_image_url("placeholder")
+
     try:
-        response_text = await openai_client.ask(f"Привіт {person}! Розкажи мені щось цікаве про себе чи своє життя",system_prompt=f"Ти - {person}, відомий вчений/історична особистість/артист. Відповідай як {person}, підтримуючи його/її стиль мови та знання. Будь коротким.")
+        with open(image_url, 'rb') as image_file:
+            await update.message.reply_photo(image_file, caption=f"Починаю розмову з {person}... 👤")
+    except Exception as e:
+        logger.error(f"Не удалось отправить фото: {e}")
+
+    try:
+        response_text = await openai_client.ask(f"Привіт {person}! Розкажи мені щось цікаве про себе чи своє життя",
+                                                system_prompt=f"Ти - {person}, відомий вчений/історична особистість/артист. Відповідай як {person}, підтримуючи його/її стиль мови та знання. Будь коротким.")
         await update.message.reply_text(response_text)
     except Exception as e:
         logger.error(f"Помилка при запиті до OpenAI при запиті: {e}")
@@ -87,7 +111,18 @@ async def quiz_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     if topic:
         prompt_text = f"Придумай одне цікаве питання для вікторини на тему '{topic}' з чотирма варіантами відповіді (A, B, C, D) та вкажи правильну відповідь."
 
-    await update.message.reply_text("Вигадую питання для вікторини... ❓")
+    image_url = get_image_url("quiz")
+
+    if not os.path.exists(image_url):
+        logger.error(f"Файл изображения не найден: {image_url}")
+        image_url = get_image_url("placeholder")
+
+    try:
+        with open(image_url, 'rb') as image_file:
+            await update.message.reply_photo(image_file, caption="Вигадую питання для вікторини... ❓")
+    except Exception as e:
+        logger.error(f"Не удалось отправить фото: {e}")
+
     try:
         response_text = await openai_client.ask(prompt_text, system_prompt="Ти творець вікторин.")
         await update.message.reply_text(response_text)
@@ -106,7 +141,18 @@ async def translate_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         )
         return
 
-    await update.message.reply_text("Перекладаю... 🌐")
+    image_url = get_image_url("translator")
+
+    if not os.path.exists(image_url):
+        logger.error(f"Файл изображения не найден: {image_url}")
+        image_url = get_image_url("placeholder")
+
+    try:
+        with open(image_url, 'rb') as image_file:
+            await update.message.reply_photo(image_file, caption="Перекладаю... 🌐")
+    except Exception as e:
+        logger.error(f"Не удалось отправить фото: {e}")
+
     try:
         system_prompt = "Ти - професійний перекладач з англійської на українську та з української на англійську. Відповідай виключно українською мовою."
         response_text = await openai_client.ask(text_to_translate, system_prompt=system_prompt)
@@ -127,7 +173,18 @@ async def resume_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         )
         return
 
-    await update.message.reply_text("Формую резюме... 📄")
+    image_url = get_image_url("resume")
+
+    if not os.path.exists(image_url):
+        logger.error(f"Файл изображения не найден: {image_url}")
+        image_url = get_image_url("placeholder")
+
+    try:
+        with open(image_url, 'rb') as image_file:
+            await update.message.reply_photo(image_file, caption="Формую резюме... 📄")
+    except Exception as e:
+        logger.error(f"Не удалось отправить фото: {e}")
+
     try:
         system_prompt = "Ти - експерт з написання резюме. На основі наданої інформації створи професійне резюме на українській мові. Використовуй заголовки та списки для форматування. Відповідай виключно українською мовою."
         response_text = await openai_client.ask(resume_info, system_prompt=system_prompt)
